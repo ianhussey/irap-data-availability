@@ -23,6 +23,7 @@ knitr::opts_chunk$set(message=FALSE,
 library(tidyverse)
 library(scales)
 library(readxl)
+library(ufs)
 library(janitor)
 library(knitr)
 library(kableExtra)
@@ -33,12 +34,34 @@ library(kableExtra)
 
 ```{r}
 
+data_tedersoo <- 
+  read_excel("../data/Tedersoo et al. - 2021 - Data sharing practices and data availability upon request - supplementary materials.xlsx", sheet = "Table S3") |>
+  janitor::clean_names()
+
 data_requests <- 
   read_excel("../data/results of data sharing requests - blinded and shuffled.xlsx", sheet = "contacted") |>
   janitor::clean_names() |>
   mutate(data_sharing_statement = ifelse(data_sharing_statement == "NA", NA, data_sharing_statement),
          data_sharing_statement_adhered_to = ifelse(data_sharing_statement_adhered_to == "NA", NA, data_sharing_statement_adhered_to),
          data_sharing_statement_type = ifelse(data_sharing_statement_type == "NA", "No data availability statement", data_sharing_statement_type))
+
+data_journals <- 
+  read_excel("../data/results of data sharing requests - journals only reshuffled.xlsx", sheet = "contacted") 
+
+```
+
+# Sharing time in previous article by Tedersoo and colleagues (2021)
+
+Data taken from their supplementary materials
+
+```{r}
+
+quantile(data_tedersoo$time_data_obtained,
+         probs = c(0.50, 0.75, 0.90, 0.95, 0.97, 0.99), 
+         na.rm = TRUE) |>
+  ceiling() |>
+  kable() |>
+  kable_classic(full_width = FALSE)
 
 ```
 
@@ -65,7 +88,7 @@ Counts and percentages by journals
 
 ```{r}
 
-data_requests|>
+data_journals |>
   count(journal) |>
   arrange(desc(n)) |>
   kable() |>
@@ -93,8 +116,13 @@ data_requests |>
                names_to = "metric",
                values_to = "response") |>
   group_by(metric) |>
-  summarize(n = sum(response),
-            percent = round_half_up(mean(response)*100, 1)) |>
+  summarize(n_total = n(),
+            n_positive = sum(response)) |>
+  rowwise() |>
+  mutate(proportion = n_positive/n_total,
+         ci_lower = ufs::confIntProp(n_positive, n_total)[1],
+         ci_upper = ufs::confIntProp(n_positive, n_total)[2]) |>
+  mutate_if(is.numeric, janitor::round_half_up, digits = 3) |>
   kable() |>
   kable_classic(full_width = FALSE)
 
@@ -109,24 +137,35 @@ Count and percentages of articles with data sharing statements (overall and by y
 
 data_requests |>
   mutate(data_sharing_statement = ifelse(data_sharing_statement == FALSE, FALSE, TRUE)) |>
-  summarize(n_articles = n(),
-            percent_data_sharing_statement = round_half_up(mean(data_sharing_statement, na.rm = TRUE)*100, 1)) |>
+  summarize(n_total = n(),
+            n_positive = sum(data_sharing_statement)) |>
+  rowwise() |>
+  mutate(proportion = n_positive/n_total,
+         ci_lower = ufs::confIntProp(n_positive, n_total)[1],
+         ci_upper = ufs::confIntProp(n_positive, n_total)[2]) |>
+  mutate_if(is.numeric, janitor::round_half_up, digits = 3) |>
   kable() |>
   kable_classic(full_width = FALSE)
 
 data_percent_data_sharing_statements <- data_requests |>
   mutate(data_sharing_statement = ifelse(data_sharing_statement == FALSE, FALSE, TRUE)) |>
   group_by(year) |>
-  summarize(n_articles = n(),
-            percent_data_sharing_statement = round_half_up(mean(data_sharing_statement, na.rm = TRUE)*100, 1)) 
+  summarize(n_total = n(),
+            n_positive = sum(data_sharing_statement)) |>
+  rowwise() |>
+  mutate(proportion = n_positive/n_total,
+         ci_lower = ufs::confIntProp(n_positive, n_total)[1],
+         ci_upper = ufs::confIntProp(n_positive, n_total)[2]) |>
+  mutate_if(is.numeric, janitor::round_half_up, digits = 3)
 
 data_percent_data_sharing_statements |>
   kable() |>
   kable_classic(full_width = FALSE)
 
-ggplot(data_percent_data_sharing_statements, aes(year, percent_data_sharing_statement/100)) +
+ggplot(data_percent_data_sharing_statements, aes(year, proportion)) +
   geom_col() + 
-  geom_text(aes(label = paste0(percent_data_sharing_statement, "%"), vjust = -0.3)) +
+  #geom_linerange(aes(ymin = ci_lower, ymax = ci_upper)) +
+  geom_text(aes(label = paste0(proportion*100, "%"), vjust = -0.3)) +
   ylab("Articles with data availability statement") +
   xlab("Year") +
   theme_linedraw() +
@@ -141,16 +180,22 @@ ggplot(data_percent_data_sharing_statements, aes(year, percent_data_sharing_stat
 
 data_percent_shared_data <- data_requests |>
   group_by(year) |>
-  summarize(n_articles = n(),
-            percent_shared_data = round_half_up(mean(shared_data, na.rm = TRUE)*100, 1)) 
+  summarize(n_total = n(),
+            n_positive = sum(shared_data)) |>
+  rowwise() |>
+  mutate(proportion = n_positive/n_total,
+         ci_lower = ufs::confIntProp(n_positive, n_total)[1],
+         ci_upper = ufs::confIntProp(n_positive, n_total)[2]) |>
+  mutate_if(is.numeric, janitor::round_half_up, digits = 3)
 
 data_percent_shared_data |>
   kable() |>
   kable_classic(full_width = FALSE)
 
-ggplot(data_percent_shared_data, aes(year, percent_shared_data/100)) +
+ggplot(data_percent_shared_data, aes(year, proportion)) +
   geom_col() + 
-  geom_text(aes(label = paste0(percent_shared_data, "%"), vjust = -0.3)) +
+  #geom_linerange(aes(ymin = ci_lower, ymax = ci_upper)) +
+  geom_text(aes(label = paste0(proportion*100, "%"), vjust = -0.3)) +
   ylab("Articles that shared data upon request") +
   xlab("Year") +
   theme_linedraw() +
@@ -168,9 +213,13 @@ Count and percentage of articles with data sharing statement that shared data by
 counts <- data_requests |>
   select(shared_data, data_sharing_statement_type) |>
   group_by(data_sharing_statement_type) |>
-  summarize(n = n(),
-            n_shared_data = sum(shared_data, na.rm = TRUE),
-            percent_shared_data = round_half_up(mean(shared_data, na.rm = TRUE)*100, 1)) 
+  summarize(n_total = n(),
+            n_positive = sum(shared_data)) |>
+  rowwise() |>
+  mutate(proportion = n_positive/n_total,
+         ci_lower = ufs::confIntProp(n_positive, n_total)[1],
+         ci_upper = ufs::confIntProp(n_positive, n_total)[2]) |>
+  mutate_if(is.numeric, janitor::round_half_up, digits = 3)
 
 counts |>
   kable() |>
@@ -190,7 +239,7 @@ Chi square test
 
 tab_results <- counts |>
   filter(data_sharing_statement_type != "actual") |>
-  select(n, n_shared_data) |>
+  dplyr::select(n_total, n_positive) |>
   as.matrix()
 
 chisq.test(tab_results, correct = FALSE) |>
