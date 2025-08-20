@@ -28,6 +28,8 @@ library(janitor)
 library(knitr)
 library(kableExtra)
 
+dir.create("plots")
+
 ```
 
 # Load data
@@ -171,6 +173,8 @@ ggplot(data_percent_data_sharing_statements, aes(year, proportion)) +
   theme_linedraw() +
   scale_y_continuous(labels = scales::percent) +
   theme(panel.grid.minor = element_blank())
+
+ggsave("plots/figure1.pdf", width = 6, height = 4)
   
 ```
 
@@ -201,6 +205,8 @@ ggplot(data_percent_shared_data, aes(year, proportion)) +
   theme_linedraw() +
   scale_y_continuous(labels = scales::percent, limits = c(0,1)) +
   theme(panel.grid.minor = element_blank())
+
+ggsave("plots/figure2.pdf", width = 6, height = 4)
   
 ```
 
